@@ -7,12 +7,7 @@ from urllib import request
 from .schemas import ChatMessage, LLMResponse, ToolCall
 
 
-class BaseLLM:
-    def chat(self, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None) -> LLMResponse:
-        raise NotImplementedError
-
-
-class OpenAICompatLLM(BaseLLM):
+class OpenAICompatLLM:
     def __init__(self, model: str, api_key: str | None, base_url: str) -> None:
         self.model = model
         self.api_key = api_key
@@ -21,6 +16,7 @@ class OpenAICompatLLM(BaseLLM):
     def chat(self, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None) -> LLMResponse:
         if not self.api_key:
             return self._offline_response(messages)
+
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": [m.to_dict() for m in messages],
@@ -48,58 +44,9 @@ class OpenAICompatLLM(BaseLLM):
                 args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
             except json.JSONDecodeError:
                 args = {"raw": args_raw}
-            tool_calls.append(ToolCall(name=fn.get("name", "unknown"), arguments=args, call_id=tc.get("id")))
+            tool_calls.append(ToolCall(name=fn.get("name", "unknown"), arguments=args))
         return LLMResponse(content=content, tool_calls=tool_calls)
 
     def _offline_response(self, messages: list[ChatMessage]) -> LLMResponse:
         user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "")
-        return LLMResponse(content=f"[offline-openai] Received task: {user_msg}\nPlease set OPENAI_API_KEY for real execution.")
-
-
-class AnthropicLLM(BaseLLM):
-    """Anthropic Messages API integration (text path + offline fallback)."""
-
-    def __init__(self, model: str, api_key: str | None, base_url: str) -> None:
-        self.model = model
-        self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
-
-    def chat(self, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None) -> LLMResponse:
-        if not self.api_key:
-            return self._offline_response(messages)
-
-        sys_msgs = [m.content for m in messages if m.role == "system"]
-        user_msgs = [m.to_dict() for m in messages if m.role in {"user", "assistant"}]
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": 1200,
-            "system": "\n\n".join(sys_msgs),
-            "messages": user_msgs,
-        }
-
-        req = request.Request(
-            f"{self.base_url}/messages",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with request.urlopen(req, timeout=90) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-
-        parts = data.get("content", [])
-        text = "\n".join(p.get("text", "") for p in parts if p.get("type") == "text")
-        return LLMResponse(content=text)
-
-    def _offline_response(self, messages: list[ChatMessage]) -> LLMResponse:
-        user_msg = next((m.content for m in reversed(messages) if m.role == "user"), "")
-        return LLMResponse(content=f"[offline-anthropic] Received task: {user_msg}\nPlease set ANTHROPIC_API_KEY for real execution.")
-
-
-def build_llm(provider: str, model: str, api_key: str | None, base_url: str) -> BaseLLM:
-    if provider == "anthropic":
-        return AnthropicLLM(model, api_key, base_url)
-    return OpenAICompatLLM(model, api_key, base_url)
+        return LLMResponse(content=f"[offline-mode] Received task: {user_msg}\nPlease set OPENAI_API_KEY for real execution.")

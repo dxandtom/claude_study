@@ -1,41 +1,36 @@
 # Agentic Lab
 
-一个可运行的 Agentic 框架（Python），吸收了以下项目思路并落地为可执行代码：
+一个**可直接运行**的 Agentic 框架（Python），参考了：
 
-- [claude-code-best/claude-code](https://github.com/claude-code-best/claude-code)：强调工程化、模块化、可构建与可调试。
-- [zts212653/clowder-ai](https://github.com/zts212653/clowder-ai)：强调多角色协作、共享记忆、流程纪律。
-- [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)：强调从最小循环到完整 agent harness 的演进学习路径。
+- CoreCoder 的“最小可运行 coding agent 主循环 + 工具系统”思路；
+- Clowder AI 的“多角色协作（plan/execute/review）、可持续记忆、团队化协作”思路。
 
-> 目标：不仅是 coding agent，还可扩展为 research / ops / analysis 等多场景 agentic runtime。
-
----
-
-## 核心能力
-
-1. **Plan-Execute-Review 主循环**
-   - 显式 Planner 输出计划；
-   - Orchestrator 负责工具循环与验证导向输出；
-   - 全流程 checkpoint 可复盘。
-
-2. **Anthropic Skills 支持（新增）**
-   - 内置 `skills/*/SKILL.md`；
-   - 自动按 task 触发或通过 `--skills` 显式指定；
-   - 将 skill 内容注入系统上下文，形成可组合工作流。
-
-3. **双 Provider 支持**
-   - `AGENTIC_PROVIDER=openai`：支持 tool-calls。
-   - `AGENTIC_PROVIDER=anthropic`：走 Anthropic Messages API。
-
-4. **可选的精美 Web UI（新增）**
-   - 本地启动 `agentic ui`；
-   - 渐变视觉 + 任务输入 + 技能输入 + 结果面板；
-   - 适合演示和非技术用户协作。
+> 目标：不只做 coding agent，而是做一个可扩展到“分析、运营、研究、自动化任务”的通用 Agentic 骨架。
 
 ---
 
-## 快速开始
+## 1. 这个框架解决什么问题
 
-### 安装
+很多项目有以下痛点：
+
+1. 只有“LLM + prompt”，没有可观测结构；
+2. 工具调用和任务规划混在一起，不可维护；
+3. 一轮对话结束后没有可复用记忆；
+4. 任务执行缺少 checkpoint 和复盘线索。
+
+**Agentic Lab**给出一版可落地解决方案：
+
+- Planner：先给出任务计划（可审计）；
+- Executor：按工具协议执行；
+- Reviewer：通过规则要求“先验证后输出”；
+- Memory：跨任务可检索记忆；
+- Checkpoint：每次运行落盘，支持复盘。
+
+---
+
+## 2. 快速开始
+
+### 2.1 安装
 
 ```bash
 python -m venv .venv
@@ -43,94 +38,156 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-### OpenAI 模式
+### 2.2 配置
+
+可用 `.env` 或环境变量：
 
 ```bash
-export AGENTIC_PROVIDER=openai
-export OPENAI_API_KEY=xxx
+export OPENAI_API_KEY=你的key
+export OPENAI_BASE_URL=https://api.openai.com/v1
 export AGENTIC_MODEL=gpt-4.1-mini
-agentic run "审查项目并提出重构方案"
 ```
 
-### Anthropic 模式
+> 不配置 `OPENAI_API_KEY` 也能跑（offline mode），用于验证流程与框架连通性。
+
+### 2.3 运行
 
 ```bash
-export AGENTIC_PROVIDER=anthropic
-export ANTHROPIC_API_KEY=xxx
-export AGENTIC_MODEL=claude-3-7-sonnet-latest
-agentic run "基于文档输出一份执行计划"
+agentic run "阅读项目并提出架构优化建议"
 ```
 
-### Skills
+输出包括：
 
-```bash
-agentic skills
-agentic run "重构这段 Python 代码" --skills coding
-```
-
-### Web UI
-
-```bash
-agentic ui --host 127.0.0.1 --port 8765
-# 浏览器打开 http://127.0.0.1:8765
-```
+- 终端最终结果；
+- `.agentic/memory.jsonl` 记忆；
+- `.agentic/checkpoints/run-*.json` 执行快照。
 
 ---
 
-## 目录结构
+## 3. 架构说明（核心）
+
+```text
+User Task
+   ↓
+HeuristicPlanner (显式计划)
+   ↓
+AgenticOrchestrator
+   ├─ Memory Recall (历史经验检索)
+   ├─ LLM chat loop (支持 tool calls)
+   ├─ ToolRegistry.execute(...)
+   ├─ Result synthesis
+   └─ Checkpoint + Memory writeback
+```
+
+### 3.1 为什么这是对 CoreCoder 思路的延展
+
+CoreCoder 非常强在“最小主循环 + 工具调用闭环”。
+本项目延展点：
+
+1. **显式 Planner 层**（新增）
+   - 让主循环更可解释，便于多人协作和审核。
+2. **跨任务 Memory**（新增）
+   - 不是只依赖当前 context，而是可累积经验。
+3. **Checkpoint 机制**（新增）
+   - 每次运行有 JSON 轨迹，利于排障和治理。
+
+### 3.2 为什么这是对 Clowder 思路的轻量落地
+
+Clowder 强调“团队化协作、共享记忆、纪律性流程”。
+本项目以单进程轻量实现了其中关键能力：
+
+- shared memory（MemoryStore）；
+- SOP-like流程（plan → execute → verify）；
+- 可继续扩展到多 agent（见 roadmap）。
+
+---
+
+## 4. 目录结构
 
 ```text
 src/agentic_lab/
-├── cli.py
-├── config.py
-├── llm.py
-├── memory.py
-├── orchestrator.py
-├── planner.py
-├── schemas.py
-├── skills_engine.py
-├── webui.py
-├── tools/
-│   ├── base.py
-│   ├── fs.py
-│   └── shell.py
-└── skills/
-    ├── coding/SKILL.md
-    └── research/SKILL.md
+├── cli.py              # CLI 入口
+├── config.py           # 环境变量与运行参数
+├── llm.py              # OpenAI-compatible 客户端（含离线兜底）
+├── memory.py           # append-only 记忆存储 + 关键词检索
+├── orchestrator.py     # 框架主循环与checkpoint
+├── planner.py          # 任务规划器
+├── schemas.py          # 数据结构（消息、tool call、plan、review）
+└── tools/
+    ├── base.py         # 工具基类 + 注册器
+    ├── fs.py           # read/write/replace 工具
+    ├── shell.py        # 安全shell工具（denylist + timeout）
+    └── __init__.py
 ```
 
 ---
 
-## 设计上的进一步优化建议
+## 5. 可扩展点（重点给你后续“碰撞思路”）
 
+### 5.1 多 Agent 团队化（推荐下一步）
 
-### 合并与运行稳定性修复
+在 `orchestrator.py` 上层增加 `TeamCoordinator`：
 
-- OpenAI 工具调用链已对齐 `tool_call_id` 回传要求，避免 tool round-trip 400。
-- 默认 skills 路径改为包内绝对路径，安装后在任意工作目录都能识别内置技能。
-- checkpoint 文件名加入微秒与随机后缀，避免并发运行覆盖。
+- ArchitectAgent：负责分解任务与设计；
+- BuilderAgent：负责执行工具；
+- CriticAgent：负责审查风险与测试覆盖；
+- Router：根据任务类型分发（coding/analysis/ops）。
 
+### 5.2 从“关键词记忆”升级到“语义记忆”
 
-1. 引入 TeamCoordinator：Builder / Critic / Researcher 多 Agent 编排。
-2. `MemoryStore` 升级为向量检索与时间衰减策略。
-3. Shell 工具从 denylist 进化到 allowlist + policy gate。
-4. 增加 E2E regression tests（含 tool-call replay）。
+当前 `MemoryStore.recall()` 是关键词 overlap，简单但稳定。
+可升级为：
 
+- embedding + 向量检索；
+- 记忆 TTL 与置信度；
+- 决策日志（decision record）单独索引。
+
+### 5.3 更强安全与治理
+
+- Shell 工具从 denylist 升级为 allowlist；
+- 工具权限按任务动态下发（policy engine）；
+- 审批门禁（高风险操作需人工确认）。
+
+### 5.4 更真实的 Reviewer
+
+当前 Reviewer 通过 system rules 约束。
+可升级为：
+
+- 独立 reviewer 模型调用；
+- 自动生成“验证计划 + 执行证据 + 结论”；
+- 不通过时自动回流到 Planner 重规划。
 
 ---
 
-## 合并冲突说明（这次你提到的“合入冲突”）
+## 6. 与常见 agent 框架的差异
 
-常见原因：
+- 比“纯 prompt agent”更工程化（可审计、可回放）；
+- 比“大而全平台”更轻量，能快速改造；
+- 对 coding 场景友好，但天然支持非 coding 工作流。
 
-1. 多个分支同时修改了 `README.md`/`pyproject.toml` 同一区域；
-2. 文件换行符不一致（CRLF/LF）；
-3. 同时新增目录结构和文档目录树，造成同段落冲突。
+---
 
-我已在仓库增加 `.gitattributes`：
+## 7. 直接可用示例
 
-- 统一文本文件为 `LF`；
-- 对 `*.md`（尤其 `README.md`）使用 `merge=union`，降低文档冲突概率；
-- 代码文件保持普通文本合并，避免错误自动拼接。
+### 示例 1：代码改造任务
 
-如果你愿意，我下一步可以再补一个 `CONTRIBUTING.md`，把分支合并顺序和 release 流程标准化，进一步减少冲突。
+```bash
+agentic run "读取 src/app.py，找出重复逻辑并重构"
+```
+
+### 示例 2：非 coding 任务
+
+```bash
+agentic run "基于 docs/ 的内容输出一份对外发布说明和风险清单"
+```
+
+---
+
+## 8. 后续建议（我建议你优先做）
+
+1. 增加 `team.py`，实现双 agent（Builder + Reviewer）最小闭环；
+2. 给 `memory.py` 增加 embeddings 后端接口；
+3. 给每个工具加 `risk_level`，执行前策略判断；
+4. 新增 `examples/` 放 3 个端到端任务样例。
+
+这样你就从“单 agent 框架”升级到“可演进的 agentic platform 雏形”。
