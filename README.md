@@ -107,3 +107,22 @@ src/agentic_lab/
 2. `MemoryStore` 升级为向量检索与时间衰减策略。
 3. Shell 工具从 denylist 进化到 allowlist + policy gate。
 4. 增加 E2E regression tests（含 tool-call replay）。
+
+
+---
+
+## 合并冲突说明（这次你提到的“合入冲突”）
+
+常见原因：
+
+1. 多个分支同时修改了 `README.md`/`pyproject.toml` 同一区域；
+2. 文件换行符不一致（CRLF/LF）；
+3. 同时新增目录结构和文档目录树，造成同段落冲突。
+
+我已在仓库增加 `.gitattributes`：
+
+- 统一文本文件为 `LF`；
+- 对 `*.md`（尤其 `README.md`）使用 `merge=union`，降低文档冲突概率；
+- 代码文件保持普通文本合并，避免错误自动拼接。
+
+如果你愿意，我下一步可以再补一个 `CONTRIBUTING.md`，把分支合并顺序和 release 流程标准化，进一步减少冲突。
