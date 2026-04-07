@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-lab"
+version = "0.1.0"
+description = "A production-ready Agentic framework inspired by CoreCoder and Clowder-AI ideas"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "agentic-lab"}]
+dependencies = []
+
+[project.scripts]
+agentic = "agentic_lab.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
