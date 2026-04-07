@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# Reduce noisy merge conflicts in docs while preserving both sides when possible.
+README.md merge=union
+*.md merge=union
+
+# Keep deterministic merges for code files.
+*.py text eol=lf
+*.toml text eol=lf
