@@ -38,7 +38,7 @@ Orchestrator 主循环
 - 可观测性：运行 checkpoint 与 memory 持久化
 - 运行方式：CLI + 本地 Web UI
 
----
+可用 `.env` 或环境变量：
 
 ## 二、按模块介绍（逐个解释职责）
 
@@ -109,7 +109,7 @@ Orchestrator 主循环
   - `agentic ui`
 - Web UI：本地可选控制台，便于演示与业务协作
 
----
+### 5.4 更真实的 Reviewer
 
 ## 三、快速使用
 
