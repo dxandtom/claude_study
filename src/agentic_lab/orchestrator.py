@@ -4,12 +4,13 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+from uuid import uuid4
 
 from .config import Settings
 from .llm import build_llm
 from .memory import MemoryStore
 from .planner import HeuristicPlanner
-from .schemas import ChatMessage
+from .schemas import ChatMessage, ToolCall
 from .skills_engine import SkillManager
 from .tools import build_default_registry
 
@@ -53,11 +54,7 @@ class AgenticOrchestrator:
             tools = self.tools.schemas() if self.settings.provider == "openai" else None
             resp = self.llm.chat(messages, tools=tools)
             if resp.tool_calls:
-                messages.append(ChatMessage(role="assistant", content=resp.content or "[tool invocation]"))
-                for tc in resp.tool_calls:
-                    result = self.tools.execute(tc.name, tc.arguments)
-                    result = result[: self.settings.max_tool_chars]
-                    messages.append(ChatMessage(role="tool", name=tc.name, content=result))
+                self._append_tool_round(messages, resp.content, resp.tool_calls)
                 continue
 
             final_text = resp.content.strip()
@@ -69,6 +66,27 @@ class AgenticOrchestrator:
         self.memory.add("result", final_text)
         return final_text or "No response produced."
 
+    def _append_tool_round(self, messages: list[ChatMessage], content: str, tool_calls: list[ToolCall]) -> None:
+        if self.settings.provider == "openai":
+            messages.append(ChatMessage(role="assistant", content=content or "", tool_calls=tool_calls))
+        else:
+            messages.append(ChatMessage(role="assistant", content=content or "[tool invocation]"))
+
+        for tc in tool_calls:
+            result = self.tools.execute(tc.name, tc.arguments)
+            result = result[: self.settings.max_tool_chars]
+            if self.settings.provider == "openai":
+                messages.append(
+                    ChatMessage(
+                        role="tool",
+                        name=tc.name,
+                        tool_call_id=tc.call_id,
+                        content=result,
+                    )
+                )
+            else:
+                messages.append(ChatMessage(role="tool", name=tc.name, content=result))
+
     def _save_checkpoint(
         self,
         task: str,
@@ -79,7 +97,8 @@ class AgenticOrchestrator:
     ) -> None:
         out_dir = Path(self.settings.checkpoint_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+        run_id = uuid4().hex[:8]
         data = {
             "task": task,
             "provider": self.settings.provider,
@@ -89,4 +108,4 @@ class AgenticOrchestrator:
             "messages": [m.to_dict() for m in messages],
             "final": final_text,
         }
-        (out_dir / f"run-{ts}.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        (out_dir / f"run-{ts}-{run_id}.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

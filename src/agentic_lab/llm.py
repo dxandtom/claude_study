@@ -48,7 +48,7 @@ class OpenAICompatLLM(BaseLLM):
                 args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
             except json.JSONDecodeError:
                 args = {"raw": args_raw}
-            tool_calls.append(ToolCall(name=fn.get("name", "unknown"), arguments=args))
+            tool_calls.append(ToolCall(name=fn.get("name", "unknown"), arguments=args, call_id=tc.get("id")))
         return LLMResponse(content=content, tool_calls=tool_calls)
 
     def _offline_response(self, messages: list[ChatMessage]) -> LLMResponse:

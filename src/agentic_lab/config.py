@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from pathlib import Path
+
+
+def _default_skills_dir() -> str:
+    return str((Path(__file__).resolve().parent / "skills").resolve())
 
 
 @dataclass
@@ -14,7 +19,7 @@ class Settings:
     max_tool_chars: int = 12000
     memory_file: str = ".agentic/memory.jsonl"
     checkpoint_dir: str = ".agentic/checkpoints"
-    skills_dir: str = "src/agentic_lab/skills"
+    skills_dir: str = _default_skills_dir()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -34,5 +39,5 @@ class Settings:
             api_key=key,
             base_url=base,
             max_rounds=int(os.getenv("AGENTIC_MAX_ROUNDS", "10")),
-            skills_dir=os.getenv("AGENTIC_SKILLS_DIR", "src/agentic_lab/skills"),
+            skills_dir=os.getenv("AGENTIC_SKILLS_DIR", _default_skills_dir()),
         )

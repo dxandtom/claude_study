@@ -103,6 +103,14 @@ src/agentic_lab/
 
 ## 设计上的进一步优化建议
 
+
+### 合并与运行稳定性修复
+
+- OpenAI 工具调用链已对齐 `tool_call_id` 回传要求，避免 tool round-trip 400。
+- 默认 skills 路径改为包内绝对路径，安装后在任意工作目录都能识别内置技能。
+- checkpoint 文件名加入微秒与随机后缀，避免并发运行覆盖。
+
+
 1. 引入 TeamCoordinator：Builder / Critic / Researcher 多 Agent 编排。
 2. `MemoryStore` 升级为向量检索与时间衰减策略。
 3. Shell 工具从 denylist 进化到 allowlist + policy gate。
