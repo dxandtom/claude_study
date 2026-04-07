@@ -2,25 +2,30 @@ from __future__ import annotations
 
 import subprocess
 
+from ..security import PermissionPipeline
 from .base import Tool
 
 
 class SafeShellTool(Tool):
     name = "run_shell"
-    description = "Run safe shell commands with timeout and denylist."
+    description = "Run shell commands through a 4-stage permission pipeline."
     parameters = {
         "type": "object",
         "properties": {"command": {"type": "string"}, "timeout": {"type": "integer", "default": 20}},
         "required": ["command"],
     }
 
-    denylist = ["rm -rf /", "shutdown", "reboot", ":(){:|:&};:"]
+    def __init__(self) -> None:
+        self.pipeline = PermissionPipeline()
 
     def run(self, **kwargs) -> str:
         cmd = kwargs["command"]
         timeout = int(kwargs.get("timeout", 20))
-        if any(x in cmd for x in self.denylist):
-            return "Blocked by safety policy."
+
+        decision = self.pipeline.evaluate(cmd)
+        if not decision.allowed:
+            return f"Blocked by safety policy ({decision.stage}): {decision.reason}"
+
         try:
             out = subprocess.run(cmd, shell=True, text=True, capture_output=True, timeout=timeout)
             body = (out.stdout + "\n" + out.stderr).strip()

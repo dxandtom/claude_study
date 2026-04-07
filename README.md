@@ -1,36 +1,119 @@
-# Agentic Lab
+# Agentic Lab（可运行的 Agent Harness 框架）
 
-一个**可直接运行**的 Agentic 框架（Python），参考了：
+Agentic Lab 是一个面向 **工程化 Agent 系统** 的 Python 框架：
+它不只做“问答”，而是强调 **计划（Plan）—执行（Execute）—审查（Review）**、工具调用、技能注入、上下文治理、权限护栏与可复盘运行记录。
 
-- CoreCoder 的“最小可运行 coding agent 主循环 + 工具系统”思路；
-- Clowder AI 的“多角色协作（plan/execute/review）、可持续记忆、团队化协作”思路。
-
-> 目标：不只做 coding agent，而是做一个可扩展到“分析、运营、研究、自动化任务”的通用 Agentic 骨架。
+> 设计目标：让这个仓库从“概念验证”进化为“可持续演进的 Agent Harness”。
 
 ---
 
-## 1. 这个框架解决什么问题
+## 一、总体介绍（先看全貌）
 
-很多项目有以下痛点：
+### 1.1 系统流程
 
-1. 只有“LLM + prompt”，没有可观测结构；
-2. 工具调用和任务规划混在一起，不可维护；
-3. 一轮对话结束后没有可复用记忆；
-4. 任务执行缺少 checkpoint 和复盘线索。
+```text
+用户任务
+  ↓
+Planner（任务拆解）
+  ↓
+SkillManager（技能匹配/注入）
+  ↓
+Orchestrator 主循环
+  ├─ ContextManager（上下文预算压缩）
+  ├─ LLM Adapter（OpenAI / Anthropic）
+  ├─ ToolRegistry（文件/命令等工具）
+  ├─ PermissionPipeline（命令权限四阶段）
+  └─ Memory + Checkpoint（持久化与复盘）
+  ↓
+最终输出
+```
 
-**Agentic Lab**给出一版可落地解决方案：
+### 1.2 当前支持能力
 
-- Planner：先给出任务计划（可审计）；
-- Executor：按工具协议执行；
-- Reviewer：通过规则要求“先验证后输出”；
-- Memory：跨任务可检索记忆；
-- Checkpoint：每次运行落盘，支持复盘。
+- 双 Provider：`openai` + `anthropic`
+- 工具调用：OpenAI 兼容 tool-calls（含 `tool_call_id` 回传）
+- 技能系统：`skills/*/SKILL.md` 自动加载与触发
+- 上下文治理：超预算时压缩历史消息
+- 安全执行：Shell 四阶段权限管线
+- 可观测性：运行 checkpoint 与 memory 持久化
+- 运行方式：CLI + 本地 Web UI
 
----
+可用 `.env` 或环境变量：
 
-## 2. 快速开始
+## 二、按模块介绍（逐个解释职责）
 
-### 2.1 安装
+### 2.1 `config.py` — 配置中心
+
+- 统一读取环境变量（provider/model/key/base_url 等）
+- 默认 skills 目录使用包内绝对路径，避免“安装后换目录就找不到技能”
+
+### 2.2 `schemas.py` — 协议数据结构
+
+- `ChatMessage`：统一消息结构
+- `ToolCall`：函数调用结构，支持 `call_id`
+- `LLMResponse` / `TaskPlan` / `ReviewReport`
+
+### 2.3 `llm.py` — 模型适配层
+
+- `OpenAICompatLLM`：OpenAI 兼容接口，支持 tool-calls
+- `AnthropicLLM`：Anthropic Messages API
+- `build_llm()`：provider 工厂
+- 无 key 时自动 offline fallback，便于本地流程调试
+
+### 2.4 `planner.py` — 计划器
+
+- 当前为启发式 Planner，输出可审计步骤
+- 后续可替换为分层规划器或多 Agent Planner
+
+### 2.5 `skills_engine.py` — 技能系统
+
+- 扫描 `skills/*/SKILL.md`
+- 支持显式技能（`--skills`）与触发词自动匹配
+- 将技能内容注入系统上下文，形成可复用 SOP
+
+### 2.6 `context.py` — 上下文治理
+
+- 控制上下文预算
+- 对历史内容进行 snip + summary + keep_recent
+- 避免长任务因上下文膨胀导致质量下降
+
+### 2.7 `security.py` + `tools/shell.py` — 安全护栏
+
+- 引入四阶段权限管线：parse → classify → policy → final
+- Shell 工具先过权限评估，再执行命令
+- 阻断高风险命令模式，降低误操作风险
+
+### 2.8 `tools/` — 工具体系
+
+- `base.py`：Tool 抽象与注册表
+- `fs.py`：读写文件、唯一替换
+- `shell.py`：安全命令执行
+
+### 2.9 `memory.py` — 记忆系统
+
+- append-only 存储
+- 关键词召回
+- 为跨任务连续工作提供“弱长期记忆”
+
+### 2.10 `orchestrator.py` — 运行时核心
+
+- 串联计划、技能、上下文、模型、工具、记忆、checkpoint
+- 负责每轮 tool-calls 的执行与消息回填
+- checkpoint 文件名含微秒 + 随机后缀，避免并发覆盖
+
+### 2.11 `cli.py` / `webui.py` — 交互入口
+
+- CLI：
+  - `agentic run "..."`
+  - `agentic skills`
+  - `agentic ui`
+- Web UI：本地可选控制台，便于演示与业务协作
+
+### 5.4 更真实的 Reviewer
+
+## 三、快速使用
+
+### 3.1 安装
 
 ```bash
 python -m venv .venv
@@ -38,156 +121,35 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-### 2.2 配置
-
-可用 `.env` 或环境变量：
+### 3.2 OpenAI 模式
 
 ```bash
-export OPENAI_API_KEY=你的key
-export OPENAI_BASE_URL=https://api.openai.com/v1
-export AGENTIC_MODEL=gpt-4.1-mini
+export AGENTIC_PROVIDER=openai
+export OPENAI_API_KEY=xxx
+agentic run "审查仓库并输出重构建议"
 ```
 
-> 不配置 `OPENAI_API_KEY` 也能跑（offline mode），用于验证流程与框架连通性。
-
-### 2.3 运行
+### 3.3 Anthropic 模式
 
 ```bash
-agentic run "阅读项目并提出架构优化建议"
+export AGENTIC_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=xxx
+agentic run "基于文档输出执行计划"
 ```
 
-输出包括：
-
-- 终端最终结果；
-- `.agentic/memory.jsonl` 记忆；
-- `.agentic/checkpoints/run-*.json` 执行快照。
-
----
-
-## 3. 架构说明（核心）
-
-```text
-User Task
-   ↓
-HeuristicPlanner (显式计划)
-   ↓
-AgenticOrchestrator
-   ├─ Memory Recall (历史经验检索)
-   ├─ LLM chat loop (支持 tool calls)
-   ├─ ToolRegistry.execute(...)
-   ├─ Result synthesis
-   └─ Checkpoint + Memory writeback
-```
-
-### 3.1 为什么这是对 CoreCoder 思路的延展
-
-CoreCoder 非常强在“最小主循环 + 工具调用闭环”。
-本项目延展点：
-
-1. **显式 Planner 层**（新增）
-   - 让主循环更可解释，便于多人协作和审核。
-2. **跨任务 Memory**（新增）
-   - 不是只依赖当前 context，而是可累积经验。
-3. **Checkpoint 机制**（新增）
-   - 每次运行有 JSON 轨迹，利于排障和治理。
-
-### 3.2 为什么这是对 Clowder 思路的轻量落地
-
-Clowder 强调“团队化协作、共享记忆、纪律性流程”。
-本项目以单进程轻量实现了其中关键能力：
-
-- shared memory（MemoryStore）；
-- SOP-like流程（plan → execute → verify）；
-- 可继续扩展到多 agent（见 roadmap）。
-
----
-
-## 4. 目录结构
-
-```text
-src/agentic_lab/
-├── cli.py              # CLI 入口
-├── config.py           # 环境变量与运行参数
-├── llm.py              # OpenAI-compatible 客户端（含离线兜底）
-├── memory.py           # append-only 记忆存储 + 关键词检索
-├── orchestrator.py     # 框架主循环与checkpoint
-├── planner.py          # 任务规划器
-├── schemas.py          # 数据结构（消息、tool call、plan、review）
-└── tools/
-    ├── base.py         # 工具基类 + 注册器
-    ├── fs.py           # read/write/replace 工具
-    ├── shell.py        # 安全shell工具（denylist + timeout）
-    └── __init__.py
-```
-
----
-
-## 5. 可扩展点（重点给你后续“碰撞思路”）
-
-### 5.1 多 Agent 团队化（推荐下一步）
-
-在 `orchestrator.py` 上层增加 `TeamCoordinator`：
-
-- ArchitectAgent：负责分解任务与设计；
-- BuilderAgent：负责执行工具；
-- CriticAgent：负责审查风险与测试覆盖；
-- Router：根据任务类型分发（coding/analysis/ops）。
-
-### 5.2 从“关键词记忆”升级到“语义记忆”
-
-当前 `MemoryStore.recall()` 是关键词 overlap，简单但稳定。
-可升级为：
-
-- embedding + 向量检索；
-- 记忆 TTL 与置信度；
-- 决策日志（decision record）单独索引。
-
-### 5.3 更强安全与治理
-
-- Shell 工具从 denylist 升级为 allowlist；
-- 工具权限按任务动态下发（policy engine）；
-- 审批门禁（高风险操作需人工确认）。
-
-### 5.4 更真实的 Reviewer
-
-当前 Reviewer 通过 system rules 约束。
-可升级为：
-
-- 独立 reviewer 模型调用；
-- 自动生成“验证计划 + 执行证据 + 结论”；
-- 不通过时自动回流到 Planner 重规划。
-
----
-
-## 6. 与常见 agent 框架的差异
-
-- 比“纯 prompt agent”更工程化（可审计、可回放）；
-- 比“大而全平台”更轻量，能快速改造；
-- 对 coding 场景友好，但天然支持非 coding 工作流。
-
----
-
-## 7. 直接可用示例
-
-### 示例 1：代码改造任务
+### 3.4 Skills 与 UI
 
 ```bash
-agentic run "读取 src/app.py，找出重复逻辑并重构"
-```
-
-### 示例 2：非 coding 任务
-
-```bash
-agentic run "基于 docs/ 的内容输出一份对外发布说明和风险清单"
+agentic skills
+agentic run "重构 Python 代码" --skills coding
+agentic ui --host 127.0.0.1 --port 8765
 ```
 
 ---
 
-## 8. 后续建议（我建议你优先做）
+## 四、下一步建议（高优先级）
 
-1. 增加 `team.py`，实现双 agent（Builder + Reviewer）最小闭环；
-2. 给 `memory.py` 增加 embeddings 后端接口；
-3. 给每个工具加 `risk_level`，执行前策略判断；
-4. 新增 `examples/` 放 3 个端到端任务样例。
-
-这样你就从“单 agent 框架”升级到“可演进的 agentic platform 雏形”。
+1. 增加单元测试（LLM mock、tool call round-trip、permission pipeline）
+2. 引入语义记忆（embedding）替代关键词召回
+3. 增加 Reviewer 子代理，实现“自动回流重规划”
+4. 增加 Hook 系统（before_tool/after_tool/on_error）
