@@ -15,6 +15,7 @@ def main() -> None:
     run_parser = sub.add_parser("run", help="Execute one task")
     run_parser.add_argument("task", help="Task you want the agentic framework to execute")
     run_parser.add_argument("--skills", default="", help="Comma separated explicit skills")
+    run_parser.add_argument("--multi-agent", action="store_true", help="Enable Claude writer + Codex reviewer iterative mode")
 
     sub.add_parser("skills", help="List available skills")
 
@@ -28,7 +29,7 @@ def main() -> None:
     if args.command == "run":
         orchestrator = AgenticOrchestrator(settings)
         skill_list = [x.strip() for x in args.skills.split(",") if x.strip()]
-        result = orchestrator.run(args.task, requested_skills=skill_list)
+        result = orchestrator.run(args.task, requested_skills=skill_list, multi_agent=args.multi_agent)
         print("\nResult")
         print(result)
         return

@@ -63,3 +63,24 @@
 ## 说明
 - 本项目为“借鉴架构思想 + 自主实现代码”。
 - 若后续继续扩展（Hook、子代理、MCP、Plan Mode），会持续补充本文件。
+
+
+## 6) 官方资料（本次多 Agent 接入补充）
+- OpenAI Codex（开源仓）：https://github.com/openai/codex
+  - 关键信息：Codex CLI 是可本地运行的 coding agent，支持命令行执行路径（docs 中含 `exec` 文档）。
+- OpenAI Codex 开发者文档：https://developers.openai.com/codex/cli
+  - 关键信息：CLI 作为 agent 使用，适合接入自动化流程。
+- Anthropic Claude 模型文档（Claude 4 迁移）：https://docs.anthropic.com/pt/docs/about-claude/models/migrating-to-claude-4
+  - 关键信息：可用新代模型命名（如 `claude-sonnet-4-20250514`）。
+
+
+## 7) clowder-ai 深度阅读结论（本次实现直接借鉴）
+基于 `README` 与 `docs/architecture/cli-integration.md`，本次做了三条关键迁移：
+1. **平台层 > 模型层**：把“多模型切换”上移为“多 Agent Runtime 协作”（CLI 子进程接入 + 统一适配层）。
+2. **事件驱动自治**：由任务状态（phase）触发 agent 行为，而不是固定流程脚本。
+3. **共享任务板（Mission Board）**：把任务状态与事件持久化，让 agent 基于公共事实协作。
+
+对应到本仓：
+- 新增 `mission_board.py` 保存 mission state + events。
+- orchestrator 中按 role + phase 执行自治调度（writer/reviewer/integrator 可配置）。
+- 外部 agent 与 fallback LLM 分层，便于后续增加更多角色（测试、文档、发布、监控等）。
