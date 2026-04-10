@@ -37,6 +37,7 @@ Orchestrator 主循环
 - 安全执行：Shell 四阶段权限管线
 - 可观测性：运行 checkpoint 与 memory 持久化
 - 运行方式：CLI + 本地 Web UI
+- 多 Agent 迭代：Claude Code Agent（Writer）↔ Codex CLI Agent（Reviewer）自动回流
 
 可用 `.env` 或环境变量：
 
@@ -109,7 +110,24 @@ Orchestrator 主循环
   - `agentic ui`
 - Web UI：本地可选控制台，便于演示与业务协作
 
-### 5.4 更真实的 Reviewer
+
+### 2.12 多 Agent 协作（Agentic 自主协作，而非固定流水线）
+
+结合 `REFERENCES.md` 中提到的 CoreCoder / clowder-ai 的“执行-审查回流”思想，当前实现改为 **Agent Runtime + Mission Board** 双层机制，支持事件驱动自治，不再是写死的 writer→reviewer 顺序脚本：
+
+1. **Writer Agent（Claude Code CLI）**：通过外部命令运行 Claude Code。
+2. **Reviewer Agent（Codex CLI）**：通过外部命令运行 Codex，并强制中文检视意见 + JSON 审查结构。
+3. **Mission Board 持久化**：每个任务都会写入 mission 状态与事件日志（创建、agent action、合入等），让多 agent 共享“正在做什么”。
+4. **事件触发自治**：`writer/reviewer/integrator` 根据 mission phase 自主触发（如 reviewer 在新实现出现后主动审查，通过后 integrator 自动合入标记）。
+5. **容错回退**：若本机未安装对应 Agent CLI，可回退到 LLM adapter（可配置关闭）。
+
+默认 Agent 命令（可通过环境变量覆盖）：
+
+- Writer agent cmd: `claude -p --output-format json`
+- Reviewer agent cmd: `codex exec --json`
+- 角色集合：`AGENTIC_MULTI_AGENT_ROLES`（默认 `writer,reviewer,integrator`）
+- 最大动作数：`AGENTIC_MULTI_AGENT_MAX_ACTIONS`（默认 12）
+
 
 ## 三、快速使用
 
@@ -142,7 +160,30 @@ agentic run "基于文档输出执行计划"
 ```bash
 agentic skills
 agentic run "重构 Python 代码" --skills coding
+agentic run "实现一个文件处理模块并修复测试" --skills coding --multi-agent
 agentic ui --host 127.0.0.1 --port 8765
+```
+
+
+### 3.5 多 Agent 环境变量（可选）
+
+```bash
+export AGENTIC_WRITER_AGENT=claude_code
+export AGENTIC_WRITER_AGENT_CMD="claude -p --output-format json"
+export AGENTIC_REVIEWER_AGENT=codex_cli
+export AGENTIC_REVIEWER_AGENT_CMD="codex exec --json"
+export AGENTIC_AGENT_TIMEOUT_SECONDS=900
+export AGENTIC_MULTI_AGENT_MAX_ACTIONS=12
+export AGENTIC_MULTI_AGENT_ROLES="writer,reviewer,integrator"
+export AGENTIC_BOARD_EVENTS_FILE=".agentic/board/events.jsonl"
+export AGENTIC_BOARD_MISSION_DIR=".agentic/board/missions"
+
+# 可选：Agent CLI 不可用时，回退到 LLM adapter
+export AGENTIC_FALLBACK_TO_LLM_ON_AGENT_ERROR=1
+export AGENTIC_WRITER_PROVIDER=anthropic
+export AGENTIC_WRITER_MODEL=claude-sonnet-4-20250514
+export AGENTIC_REVIEWER_PROVIDER=openai
+export AGENTIC_REVIEWER_MODEL=gpt-5
 ```
 
 ---
